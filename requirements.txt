@@ -1,0 +1,7 @@
+ipykernel
+opencv
+mediapipe
+google
+pandas
+numpy
+matplotlib
