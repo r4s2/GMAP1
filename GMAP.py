@@ -26,13 +26,17 @@ shoulder_angle_list = []
 # global functions
 def plot_graph():
     x = np.linspace(0, len(shoulder_angle_list) - 1, len(shoulder_angle_list))
+    amplitude = np.average(shoulder_angle_list)
     plt.plot(x, shoulder_angle_list)
+    plt.plot(x, np.full_like(x, amplitude))
     plt.title('Shoulder Angle over Time ')
     plt.xlabel('time')
     plt.ylabel('shoulder angle')
     plt.show()
     
 def record_video():
+    #shoulder_angle_list.clear()
+    
     with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
         while cap.isOpened():
             ret, frame = cap.read()
