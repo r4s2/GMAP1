@@ -20,23 +20,44 @@ cap = cv2.VideoCapture(0)
 # global variables
 frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-shoulder_angle_list = []
+frame_dims =  [frame_width, frame_height]
+relevant_list = []
+supp_list1 = []
 
 
 # global functions
+def clear_lists():
+    relevant_list.clear() 
+    supp_list1.clear() 
+    total_arc = 0
+    
 def plot_graph():
-    x = np.linspace(0, len(shoulder_angle_list) - 1, len(shoulder_angle_list))
-    amplitude = np.average(shoulder_angle_list)
-    plt.plot(x, shoulder_angle_list)
-    plt.plot(x, np.full_like(x, amplitude))
-    plt.title('Shoulder Angle over Time ')
+    x = np.linspace(0, len(relevant_list) - 1, len(relevant_list))
+    #mean = np.average(relevant_list)
+    #dy_da = np.gradient(relevant_list)
+    zeroes = []
+    for i in range(1, len(relevant_list) - 1):
+        try: 
+            if relevant_list[i] < relevant_list[i - 5] and relevant_list[i] < relevant_list[i + 5] and relevant_list[i] != relevant_list[i + 5]:
+                if relevant_list[i] < relevant_list[i - 2] and relevant_list[i] < relevant_list[i + 2] and relevant_list[i] != relevant_list[i + 2]:
+                    if relevant_list[i] < relevant_list[i - 1] and relevant_list[i] < relevant_list[i + 1] and relevant_list[i] != relevant_list[i+ 1]:
+                        zeroes.append(i)
+        except: 
+            pass
+
+    plt.plot(x, relevant_list)
+    #plt.plot(x, dy_da)
+    plt.vlines(zeroes, ymin=-30, ymax=30, color='black')
+    #plt.plot(x, np.full_like(x, 0))
+    plt.title('Shoulder Swing Over Time ')
     plt.xlabel('time')
     plt.ylabel('shoulder angle')
     plt.show()
     
 def record_video():
-    #shoulder_angle_list.clear()
-    
+    clear_lists() 
+    total_arc = 0.00
+
     with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
         while cap.isOpened():
             ret, frame = cap.read()
@@ -47,10 +68,9 @@ def record_video():
                 results = pose.process(image)
                 image.flags.writeable = True
                 image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-                
-                # local variables 
                 landmarks = results.pose_landmarks.landmark
                 
+                # local variables 
                 shoulder = [landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
                 ref_shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
                 elbow = [landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].y]
@@ -91,23 +111,47 @@ def record_video():
                         
                         return angle 
                     shoulder_angle = two_point_angle(shoulder, elbow)
-                    
+                        
                     display_parts("elbow", elbow)
                     display_parts("shoulder", shoulder)
                     display_parts("wrist", wrist)        
                     #display_parts(("       angle:"+str(elbow_angle)), elbow)
                     #display_parts(("             angle:"+str(shoulder_angle)), shoulder)
-                    shoulder_angle_list.append(int(shoulder_angle))
+                    relevant_list.append(float(shoulder_angle))
+                    
+
+                    def arc_math(shoulder, e1, e2):
+                        try: 
+                            shoulder = np.multiply(shoulder, frame_dims)
+                            e1 = np.multiply(e1, frame_dims)
+                            e2 = np.multiply(e2, frame_dims)
+
+                            #radius = (shoulder[0]-e2[0])**2 + (shoulder[1]-e2[1])**2
+                            #bottom_side = (e2[0]-e1[0])**2 + (e2[1]-e1[0])**2 
+                            #angle = np.arcsin(-(bottom_side - 2*radius)/(2*(radius**2)))
+                            #arc = radius * angle
+                            #return arc
+                            if e2[0]-e1[0] > 10 or e2[0]-e1[0] < -10:
+                                length = np.sqrt(np.square(e2[0]-e1[0]) + np.square(e2[1]-e1[1]))
+                                
+                                
+                            else:
+                                length = 0
+                                
+                            return length
+                        
+                        except: 
+                            pass
+                        
+                    supp_list1.append(elbow)  
+                    arc = abs(arc_math(shoulder, supp_list1[-2], elbow))
+                    total_arc += arc
+
                     
                     cv2.rectangle(image, (0,0), (225,73), (245,117,16), -1)
-                    cv2.putText(image, 'SHOULDER', (15,12), 
+                    cv2.putText(image, 'stride', (15,12), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(shoulder_angle), 
-                                (10,60), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 2, (255,255,255), 2, cv2.LINE_AA)
-                    cv2.putText(image, 'ELBOW', (15,90), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(elbow_angle), 
+                    cv2.putText(image, str(total_arc), 
                                 (10,140),        
                                 cv2.FONT_HERSHEY_SIMPLEX, 2, (255,255,255), 2, cv2.LINE_AA)
             
@@ -124,11 +168,11 @@ def record_video():
             cv2.imshow('Mediapipe Feed', image)
             if cv2.waitKey(10) & 0xFF == ord('q'):
                 break
-        cap.release()
         cv2.destroyAllWindows()
         pass
 
 def exit_application():
+    cap.release()
     root.destroy()
 
 root = ctk.CTk() 
@@ -143,3 +187,4 @@ exit_button = ctk.CTkButton(root, text="Exit", command=exit_application)
 exit_button.pack(pady=20)
 
 root.mainloop()
+
