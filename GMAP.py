@@ -12,6 +12,9 @@ import numpy as np
 import time 
 import matplotlib.pyplot as plt
 import customtkinter as ctk
+import os 
+import json
+from datetime import datetime 
 
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose 
@@ -21,42 +24,121 @@ cap = cv2.VideoCapture(0)
 frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 frame_dims =  [frame_width, frame_height]
-relevant_list = []
-supp_list1 = []
+ref_list1 = []
+ref_list2 = []
+ref_list3 = []
+refvar1 = 0.00
+refvar2 = 0.00
+task_state = "None"
 
+
+# math 
+def display_parts(image, text, designation):
+    cv2.putText(image, text, 
+                tuple(np.multiply(designation, [frame_width, frame_height]).astype(int)), 
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA
+                        )
+def three_point_angle(a,b,c):
+    a = np.array(a) # First
+    b = np.array(b) # Mid
+    c = np.array(c) # End
+    
+    radians = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
+    angle = np.abs(radians*180.0/np.pi)
+    
+    if angle >180.0:
+        angle = 360-angle
+        
+    return angle
+def two_point_angle(p1, p2):
+    opp = p2[0] - p1[0]
+    adj = p2[1] - p1[1]
+    radians = np.arctan(opp/adj)
+    angle = radians*180/np.pi 
+    
+    return angle
+def arc_math(main, p1, p2):
+    try: 
+        main = np.multiply(main, frame_dims)
+        p1 = np.multiply(p1, frame_dims)
+        p2 = np.multiply(p2, frame_dims)
+
+        #radius = (main[0]-e2[0])**2 + (main[1]-e2[1])**2
+        #bottom_side = (e2[0]-e1[0])**2 + (e2[1]-e1[0])**2 
+        #angle = np.arcsin(-(bottom_side - 2*radius)/(2*(radius**2)))
+        #arc = radius * angle
+        #return arc
+        if p2[0]-p1[0] > 10 or p2[0]-p1[0] < -10:
+            length = np.sqrt(np.square(p2[0]-p1[0]) + np.square(p2[1]-p1[1]))
+            
+            
+        else:
+            length = 0
+            
+        return length
+    
+    except: 
+        pass
 
 # global functions
-def clear_lists():
-    relevant_list.clear() 
-    supp_list1.clear() 
-    total_arc = 0
-    
-def plot_graph():
-    x = np.linspace(0, len(relevant_list) - 1, len(relevant_list))
-    #mean = np.average(relevant_list)
-    #dy_da = np.gradient(relevant_list)
-    zeroes = []
-    for i in range(1, len(relevant_list) - 1):
-        try: 
-            if relevant_list[i] < relevant_list[i - 5] and relevant_list[i] < relevant_list[i + 5] and relevant_list[i] != relevant_list[i + 5]:
-                if relevant_list[i] < relevant_list[i - 2] and relevant_list[i] < relevant_list[i + 2] and relevant_list[i] != relevant_list[i + 2]:
-                    if relevant_list[i] < relevant_list[i - 1] and relevant_list[i] < relevant_list[i + 1] and relevant_list[i] != relevant_list[i+ 1]:
-                        zeroes.append(i)
-        except: 
-            pass
+def setup(state):
+    global task_state
+    global refvar1
+    global refvar2
+    ref_list1.clear() 
+    ref_list2.clear() 
+    ref_list3.clear()
+    refvar2 = 0.00
+    refvar1 = 0.00
+    task_state = state
 
-    plt.plot(x, relevant_list)
-    #plt.plot(x, dy_da)
-    plt.vlines(zeroes, ymin=-30, ymax=30, color='black')
-    #plt.plot(x, np.full_like(x, 0))
-    plt.title('Shoulder Swing Over Time ')
-    plt.xlabel('time')
-    plt.ylabel('shoulder angle')
-    plt.show()
+def plot_graph():
     
-def record_video():
-    clear_lists() 
-    total_arc = 0.00
+    if task_state == "arm swing":
+        global refvar2 
+        
+        mins_x = []
+        for i in range(1, len(ref_list1) - 1):
+            try: 
+                if ref_list1[i] < ref_list1[i - 5] and ref_list1[i] < ref_list1[i + 5] and ref_list1[i] != ref_list1[i + 5]:
+                    if ref_list1[i] < ref_list1[i - 2] and ref_list1[i] < ref_list1[i + 2] and ref_list1[i] != ref_list1[i + 2]:
+                        if ref_list1[i] < ref_list1[i - 1] and ref_list1[i] < ref_list1[i + 1] and ref_list1[i] != ref_list1[i+ 1]:
+                            mins_x.append(i)
+            except: 
+                pass   
+
+        
+        Data_inf_msg = ""
+        refvar = 0
+        for index, item in enumerate(mins_x):
+            if index == 0:
+                refpoint = 0
+            else: 
+                refpoint = ref_list2[mins_x[index-1]]
+            change_in_interval = int(ref_list2[item] - refpoint)
+            Data_inf_msg = f"arm swing was \n {change_in_interval}  \n pixels long"    
+            refvar2 += change_in_interval 
+            plt.annotate(Data_inf_msg, xy=(item, -30))  
+        refvar2 = (refvar2 - ref_list2[mins_x[0]]) / float(len(mins_x)-1)
+        
+            
+        angle_x = np.linspace(0, len(ref_list1) - 1, len(ref_list1))
+        swing_x = np.linspace(0, len(ref_list2) - 1, len(ref_list2))
+        plt.plot(angle_x, ref_list1)   
+        plt.plot(swing_x, ref_list2)
+        plt.vlines(mins_x, ymin=-30, ymax=30, color='black')
+        plt.title('Shoulder Swing Over Time ')
+        plt.xlabel('time')
+        plt.ylabel('y')
+
+    
+    
+    plt.show()  
+    
+def arm_swing(state="arm swing"):
+    setup(state) 
+    global refvar1
+    
 
     with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
         while cap.isOpened():
@@ -77,7 +159,7 @@ def record_video():
                 wrist = [landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].x,landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].y]
                 shoulder_alignment = [np.abs(np.multiply(shoulder[0], frame_width)-np.multiply(ref_shoulder[0], frame_width)), np.abs(np.multiply(shoulder[1], frame_height)-np.multiply(ref_shoulder[1], frame_height))]
             
-                if shoulder_alignment[0] <= 150:
+                if shoulder_alignment[0] <= 200:
 
                     # rendering 
                     mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS,
@@ -85,73 +167,22 @@ def record_video():
                                             mp_drawing.DrawingSpec(color=(245,66,230), thickness=3, circle_radius=2) 
                                             )               
                     
-                    def display_parts(text, designation):
-                        cv2.putText(image, text, 
-                                    tuple(np.multiply(designation, [frame_width, frame_height]).astype(int)), 
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA
-                                            )
-                    def three_point_angle(a,b,c):
-                        a = np.array(a) # First
-                        b = np.array(b) # Mid
-                        c = np.array(c) # End
-                        
-                        radians = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
-                        angle = np.abs(radians*180.0/np.pi)
-                        
-                        if angle >180.0:
-                            angle = 360-angle
-                            
-                        return angle
                     elbow_angle = three_point_angle(shoulder, elbow, wrist)
-                    def two_point_angle(p1, p2):
-                        opp = p2[0] - p1[0]
-                        adj = p2[1] - p1[1]
-                        radians = np.arctan(opp/adj)
-                        angle = radians*180/np.pi 
-                        
-                        return angle 
-                    shoulder_angle = two_point_angle(shoulder, elbow)
-                        
-                    display_parts("elbow", elbow)
-                    display_parts("shoulder", shoulder)
-                    display_parts("wrist", wrist)        
-                    #display_parts(("       angle:"+str(elbow_angle)), elbow)
-                    #display_parts(("             angle:"+str(shoulder_angle)), shoulder)
-                    relevant_list.append(float(shoulder_angle))
+                    shoulder_angle = two_point_angle(shoulder, elbow)  
+                    display_parts(image, "elbow", elbow)
+                    display_parts(image, "shoulder", shoulder)
+                    display_parts(image, "wrist", wrist) 
+                    ref_list1.append(float(shoulder_angle))                        
+                    ref_list3.append(elbow)  
                     
-
-                    def arc_math(shoulder, e1, e2):
-                        try: 
-                            shoulder = np.multiply(shoulder, frame_dims)
-                            e1 = np.multiply(e1, frame_dims)
-                            e2 = np.multiply(e2, frame_dims)
-
-                            #radius = (shoulder[0]-e2[0])**2 + (shoulder[1]-e2[1])**2
-                            #bottom_side = (e2[0]-e1[0])**2 + (e2[1]-e1[0])**2 
-                            #angle = np.arcsin(-(bottom_side - 2*radius)/(2*(radius**2)))
-                            #arc = radius * angle
-                            #return arc
-                            if e2[0]-e1[0] > 10 or e2[0]-e1[0] < -10:
-                                length = np.sqrt(np.square(e2[0]-e1[0]) + np.square(e2[1]-e1[1]))
-                                
-                                
-                            else:
-                                length = 0
-                                
-                            return length
-                        
-                        except: 
-                            pass
-                        
-                    supp_list1.append(elbow)  
-                    arc = abs(arc_math(shoulder, supp_list1[-2], elbow))
-                    total_arc += arc
-
+                    arc = abs(arc_math(shoulder, ref_list3[-2], elbow))
+                    refvar1 += arc * 0.1
+                    ref_list2.append(refvar1)
                     
                     cv2.rectangle(image, (0,0), (225,73), (245,117,16), -1)
                     cv2.putText(image, 'stride', (15,12), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1, cv2.LINE_AA)
-                    cv2.putText(image, str(total_arc), 
+                    cv2.putText(image, str(refvar1), 
                                 (10,140),        
                                 cv2.FONT_HERSHEY_SIMPLEX, 2, (255,255,255), 2, cv2.LINE_AA)
             
@@ -171,17 +202,63 @@ def record_video():
         cv2.destroyAllWindows()
         pass
 
+def save():
+    global task_state
+    global refvar1
+    global refvar2
+    
+    current_date = datetime.now()
+    
+    with open(f"/Users/rehan/Desktop/C00D1NG/GMAP/records/{task_state}/{current_date}.json", "w") as json_file:
+        contents = '{'+f'"{task_state}":{refvar2}'+'}'
+        json_file.write(contents)
+
+def reference():
+    global task_state
+    global refvar1
+    global refvar2
+    records_list = []
+    json_files = [filename for filename in os.listdir(f"/Users/rehan/Desktop/C00D1NG/GMAP/records/{task_state}") if filename.endswith('.json')]
+    json_files.sort()
+    
+    for filename in json_files:
+        if filename.endswith('.json'):
+            file_path = os.path.join(f"/Users/rehan/Desktop/C00D1NG/GMAP/records/{task_state}", filename)
+            print(filename)
+            with open(file_path, 'r') as file:
+                json_data = json.load(file) 
+            records_list.append(json_data["arm swing"])
+            
+    percent_change = 100 * (records_list[-1]/records_list[0])
+    message = f"your {task_state} \nis {percent_change} \nof what it was"     
+    x = np.linspace(0, len(records_list) - 1, len(records_list))
+    plt.plot(x, records_list)
+    plt.title(f"History of {task_state}")
+    plt.annotate(message, xy=(len(records_list)-1, records_list[-1]))
+    plt.xlabel('entries')
+    plt.ylabel(f"{task_state}")
+    plt.show()
+    
+def load (): 
+    pass 
+
 def exit_application():
     cap.release()
     root.destroy()
+    
+
 
 root = ctk.CTk() 
 root.title("G-MAP")
 #root._set_appearance_mode("dark")
 
-video_button = ctk.CTkButton(root, text = "record", command=record_video)
+video_button = ctk.CTkButton(root, text = "record", command=arm_swing)
 video_button.pack(padx=10, pady=10)
 plot_button = ctk.CTkButton(root, text = "plot", command=plot_graph)
+plot_button.pack(padx=10, pady=10)
+plot_button = ctk.CTkButton(root, text = "save to files", command=save)
+plot_button.pack(padx=10, pady=10)
+plot_button = ctk.CTkButton(root, text = "review previous", command=reference)
 plot_button.pack(padx=10, pady=10)
 exit_button = ctk.CTkButton(root, text="Exit", command=exit_application)
 exit_button.pack(pady=20)
