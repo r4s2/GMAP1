@@ -218,12 +218,12 @@ def reference():
     global refvar1
     global refvar2
     records_list = []
-    json_files = [filename for filename in os.listdir(f"/Users/rehan/Desktop/C00D1NG/GMAP/records/{task_state}") if filename.endswith('.json')]
+    json_files = [filename for filename in os.listdir(f"/Users/rehansha/Desktop/C00D1NG/GMAP/records/{task_state}") if filename.endswith('.json')]
     json_files.sort()
     
     for filename in json_files:
         if filename.endswith('.json'):
-            file_path = os.path.join(f"/Users/rehan/Desktop/C00D1NG/GMAP/records/{task_state}", filename)
+            file_path = os.path.join(f"/Users/rehansha/Desktop/C00D1NG/GMAP/records/{task_state}", filename)
             print(filename)
             with open(file_path, 'r') as file:
                 json_data = json.load(file) 
